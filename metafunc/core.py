@@ -1,17 +1,6 @@
 import sys
 import types
 
-# TODO: We currently require a new module to be created and attached to an
-#       existing module.  Perhaps we could attach a module loader to an
-#       existing module, which will allow the flexible importing directly.
-# XXX:  Relative imports such as "from . import hofs.doubled import one"
-#       has not been tested.
-# XXX:  Module reloading has not been tested.
-# XXX:  What about docstrings of generated modules?
-# IDEA: Perhaps provide an option that an hof can only be used once in a chain.
-# IDEA: Instead of having 'source_module' and 'module_name', just have a one
-#       input that is both, such as 'hof.hofs'.
-
 
 _identity = lambda x: x
 
@@ -22,7 +11,7 @@ class ModuleLoader(object):
         self._source = source
 
     def find_module(self, fullname, path=None):
-        base, _, hof = fullname.rpartition('.')
+        base, dot, hof = fullname.rpartition('.')
         if base == self._source.__name__ and hof in self._source._hofs:
             return self
 
@@ -30,7 +19,7 @@ class ModuleLoader(object):
         # if the module is already loaded, we must return it
         if fullname in sys.modules:
             return sys.modules[fullname]
-        base, _, name = fullname.rpartition('.')
+        base, dot, name = fullname.rpartition('.')
         item = MetaModule(name, self._source)
         item.__loader__ = self
         return item
@@ -39,12 +28,15 @@ class ModuleLoader(object):
 class BaseModule(types.ModuleType):
     """ Base module to ensure proper adherence to module requirements"""
     def __init__(self, name, source):
-        fullname = source.__name__ + '.' + name
-        super(BaseModule, self).__init__(fullname)
-        self.__package__ = fullname
+        try:
+            name = source.__name__ + '.' + name
+        except AttributeError:
+            pass
+        super(BaseModule, self).__init__(name)
+        self.__package__ = name
         self.__file__ = __file__
         self.__path__ = []
-        sys.modules[fullname] = self
+        sys.modules[name] = self
         sys.meta_path.append(ModuleLoader(self))
 
 
@@ -110,7 +102,11 @@ class FirstMetaModule(BaseModule):
         self._rfunc = _identity
         for item in self._hofs:
             setattr(self, item, MetaModule(item, self))
-        setattr(source, name, self)
+        if source:
+            try:
+                setattr(source, name, self)
+            except AttributeError:
+                pass
 
     def __getattr__(self, name):
         if name in self._fofs:
@@ -118,13 +114,12 @@ class FirstMetaModule(BaseModule):
         raise AttributeError
 
 
-def metafunc(source_module, module_name, fofs, hofs, reverse=False,
-             composition=False):
+def metafunc(module_name, fofs, hofs, reverse=False, composition=False):
     """ Create a module of higher-order functions that can be chained on import
 
     For example:
-    >>> from hof_module.inc.inc import one as one_plus_two  # doctest: +SKIP
-    >>> one_plus_two()  # doctest: +SKIP
+    >>> from hof_module.inc.inc import one as one_plus_two
+    >>> one_plus_two()
     3
 
     Arguments:
@@ -142,7 +137,7 @@ def metafunc(source_module, module_name, fofs, hofs, reverse=False,
     composition (default False) -- determines how hofs are applied (see below)
 
     # Example import with hofs "higher1" and "higher2", and fof "first"
-    >>> from hof_module.higher1.higher2 import first  # doctest: +SKIP
+    >>> from hof_module.higher1.higher2 import first
 
     If ``composition`` is False (the default), then hofs will be applied as:
         "higher2(higher1(first))(*args, **kwargs)"
@@ -152,6 +147,9 @@ def metafunc(source_module, module_name, fofs, hofs, reverse=False,
     If ``reverse`` is True, then the order of "higher1" and "higher2" from
     above are reversed.
     """
+    source_module, dot, module_name = module_name.rpartition('.')
+    if source_module and source_module not in sys.modules:
+        raise ValueError("Bad module name (base module doesn't exist)")
     if source_module in sys.modules:
         source_module = sys.modules[source_module]
 
