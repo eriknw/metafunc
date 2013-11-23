@@ -17,7 +17,7 @@ install:
 # command to run tests
 # require 100% coverage (not including test files) to pass Travis CI test
 script:
-    - coverage run --source=metafunc $(which nosetests) --with-doctest
+    - coverage run --source=metafunc $(which nosetests)
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' ]]; then coverage report --show-missing --fail-under=100 ; fi
     - if [[ $TRAVIS_PYTHON_VERSION != 'pypy' ]]; then pep8 --ignore=$PEP8_IGNORE --exclude=conf.py -r --show-source . ; fi
 

@@ -209,7 +209,34 @@ def test_bad_module_name():
     assert raises(ValueError, lambda: metafunc('zmm.foo.bar.comp', fofs1,
                                                hofs1, composition=True))
 
-# TODO: test different forms for inputing fofs and hofs
+fofs3 = [('f_one', one), ('two', two), three, identity]
+hofs3 = [('f_inc', inc), ('double', double), triple]
+
+
+def test_function_tuple():
+    metafunc('zmm.fcomp', fofs3, hofs3, composition=True)
+    from zmm.fcomp.f_inc import f_one
+    assert f_one() == 2
+    from zmm.fcomp.double.f_inc.triple import f_one, two, three
+    assert f_one() == 9
+    assert two() == 15
+    assert three() == 21
+
+
+fofs4 = {'d_one': one, 'two': two, 'three': three}
+hofs4 = {'d_inc': inc, 'double': double, 'triple': triple}
+
+
+def test_function_dict():
+    metafunc('zmm.dcomp', fofs4, hofs4, composition=True)
+    from zmm.dcomp.d_inc import d_one
+    assert d_one() == 2
+    from zmm.dcomp.double.d_inc.triple import d_one, two, three
+    assert d_one() == 9
+    assert two() == 15
+    assert three() == 21
+
+
 # TODO: test (and implement) callable
 # TODO: test (and implement) decorator decorator
 # TODO: test (and implement) attaching to existing module
