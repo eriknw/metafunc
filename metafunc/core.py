@@ -112,7 +112,12 @@ class FirstMetaModule(BaseModule):
 
 
 class HiddenMetaModule(BaseModule):
-    """ A module from which the higher-order functions originate"""
+    """ A module from which the higher-order functions originate
+
+    This module is used to mirror an existing module and provide higher-order
+    functions to originate from the existing module.  It is hidden so it
+    doesn't replace the original module.
+    """
     def __init__(self, name, fofs, hofs, doc='', reverse=False,
                  composition=False):
         super(HiddenMetaModule, self).__init__(name, None, hidden=True)
