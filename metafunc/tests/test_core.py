@@ -1,3 +1,5 @@
+import imp
+import sys
 from metafunc.core import metafunc
 from metafunc.utils import raises
 from zmm.firstorder import one, two, three, inc, double, triple, identity
@@ -237,7 +239,66 @@ def test_function_dict():
     assert three() == 21
 
 
-# TODO: test (and implement) callable
-# TODO: test (and implement) decorator decorator
-# TODO: test (and implement) attaching to existing module
-# TODO: test (and implement) single-use hofs
+def test_empty():
+    metafunc('zmm.empty_fofs', {}, hofs1, composition=True)
+    from zmm.empty_fofs.double.triple import double
+    metafunc('zmm.empty_hofs', fofs1, {}, composition=True)
+    import zmm.empty_hofs
+    metafunc('zmm.empty_fofs_hofs', {}, {}, composition=True)
+    import zmm.empty_fofs_hofs
+    metafunc('zmm.empty_fofs_hofs2', {}, {})
+    import zmm.empty_fofs_hofs2
+    metafunc('zmm.empty_fofs_hofs3', {}, {}, reverse=True)
+    import zmm.empty_fofs_hofs3
+    metafunc('zmm.empty_fofs_hofs4', {}, {}, composition=True, reverse=True)
+    import zmm.empty_fofs_hofs4
+    metafunc('zmm.empty_fofs_hofs5', None, ())
+    import zmm.empty_fofs_hofs5
+
+
+def test_mirror_module():
+    sys.modules['empty1'] = imp.new_module('empty1')
+    import empty1 as orig_empty
+    meta_empty = metafunc('empty1', fofs1, hofs1, composition=True)
+    import empty1 as new_empty
+    assert orig_empty == meta_empty
+    assert orig_empty == new_empty
+    assert meta_empty.double.double.one() == 4
+    from empty1.inc.inc.double import one
+    assert one() == 6
+    # don't override modules
+    assert raises(ValueError, lambda: metafunc('empty1', fofs1, hofs1,
+                                               composition=True))
+
+
+def test_module_input():
+    mod = sys.modules['empty2'] = imp.new_module('empty2')
+    meta_empty = metafunc(mod, fofs1, hofs1, composition=True)
+    assert mod == meta_empty
+    from empty2.inc.inc.inc import one
+    assert one() == 4
+
+
+def test_attribute_failure():
+    sys.modules['empty3'] = imp.new_module('empty3')
+    metafunc('empty3.comp', fofs1, hofs1, composition=True)
+    import empty3.comp
+    assert raises(AttributeError, lambda: empty3.comp.foo)
+    assert raises(AttributeError, lambda: empty3.comp.inc.double.foo)
+    metafunc('empty3', fofs1, hofs1, composition=True)
+    import empty3
+    assert raises(AttributeError, lambda: empty3.inc._source.foo)
+
+
+def test_module_loader():
+    sys.modules['empty4'] = imp.new_module('empty4')
+    metafunc('empty4.comp', fofs1, hofs1, composition=True)
+    import empty4.comp.inc
+    tested = 0
+    for item in sys.meta_path:
+        if hasattr(item, 'find_module'):
+            loader = item.find_module('empty4.comp.inc')
+            if loader:
+                assert empty4.comp.inc is loader.load_module('empty4.comp.inc')
+                tested += 1
+    assert tested > 0

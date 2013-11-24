@@ -27,7 +27,7 @@ class ModuleLoader(object):
 
 class BaseModule(types.ModuleType):
     """ Base module to ensure proper adherence to module requirements"""
-    def __init__(self, name, source):
+    def __init__(self, name, source, hidden=False):
         try:
             name = source.__name__ + '.' + name
         except AttributeError:
@@ -36,7 +36,9 @@ class BaseModule(types.ModuleType):
         self.__package__ = name
         self.__file__ = __file__
         self.__path__ = []
-        sys.modules[name] = self
+        self._source = source
+        if not hidden:
+            sys.modules[name] = self
         sys.meta_path.append(ModuleLoader(self))
 
 
@@ -55,30 +57,28 @@ class MetaModule(BaseModule):
         self._composition = source._composition
         self._func = self._hofs[name]
         self._rfunc = lambda x: source._rfunc(self._func(x))
+        for funcname in self._fofs:
+            setattr(self, funcname, self._apply(funcname))
 
-        def composer(f):
-            return lambda *args, **kwargs: self._func(f(*args, **kwargs))
-
-        def rcomposer(f):
-            return lambda *args, **kwargs: self._rfunc(f(*args, **kwargs))
-
-        # Add first order functions and apply hofs in the manner as requested
-        for first_name, first_func in self._fofs.items():
-            prev_func = getattr(source, first_name)
+    def _apply(self, funcname):
+        if self._reverse:
+            first_func = self._fofs[funcname]
             if self._composition:
-                if self._reverse:
-                    # func1(func2(orig_func(*args, **kwargs)))
-                    setattr(self, first_name, rcomposer(first_func))
-                else:
-                    # func2(func1(orig_func(*args, **kwargs)))
-                    setattr(self, first_name, composer(prev_func))
+                # func1(func2(orig_func(*args, **kwargs)))
+                return lambda *args, **kwargs: (
+                    self._rfunc(first_func(*args, **kwargs)))
             else:
-                if self._reverse:
-                    # func1(func2(orig_func))(*args, **kwargs)
-                    setattr(self, first_name, self._rfunc(first_func))
-                else:
-                    # func2(func1(orig_func))(*args, **kwargs)
-                    setattr(self, first_name, self._func(prev_func))
+                # func1(func2(orig_func))(*args, **kwargs)
+                return self._rfunc(first_func)
+        else:
+            prev_func = getattr(self._source, funcname)
+            if self._composition:
+                # func2(func1(orig_func(*args, **kwargs)))
+                return lambda *args, **kwargs: (
+                    self._func(prev_func(*args, **kwargs)))
+            else:
+                # func2(func1(orig_func))(*args, **kwargs)
+                return self._func(prev_func)
 
     def __getattr__(self, name):
         # Allow attribute chaining of hofs
@@ -103,10 +103,32 @@ class FirstMetaModule(BaseModule):
         for item in self._hofs:
             setattr(self, item, MetaModule(item, self))
         if source:
-            try:
-                setattr(source, name, self)
-            except AttributeError:
-                pass
+            setattr(source, name, self)
+
+    def __getattr__(self, name):
+        if name in self._fofs:
+            return self._fofs[name]
+        raise AttributeError
+
+
+class HiddenMetaModule(BaseModule):
+    """ A module from which the higher-order functions originate"""
+    def __init__(self, name, fofs, hofs, doc='', reverse=False,
+                 composition=False):
+        super(HiddenMetaModule, self).__init__(name, None, hidden=True)
+        self._fofs = fofs
+        self._hofs = hofs
+        self._reverse = reverse
+        self._composition = composition
+        self._func = _identity
+        self._rfunc = _identity
+        source_module = sys.modules[name]
+        for item in self._hofs:
+            itemname = '%s.%s' % (name, item)
+            if itemname in sys.modules:
+                raise ValueError('Cannot override module %s' % itemname)
+            setattr(self, item, MetaModule(item, self))
+            setattr(source_module, item, getattr(self, item))
 
     def __getattr__(self, name):
         if name in self._fofs:
@@ -147,19 +169,31 @@ def metafunc(module_name, fofs, hofs, reverse=False, composition=False):
     If ``reverse`` is True, then the order of "higher1" and "higher2" from
     above are reversed.
     """
-    source_module, dot, module_name = module_name.rpartition('.')
+    # if input is a module object, get its name
+    module_name = getattr(module_name, '__name__', module_name)
+    # partition package name into module path name and module name
+    source_module, dot, meta_name = module_name.rpartition('.')
     if source_module and source_module not in sys.modules:
         raise ValueError("Bad module name (base module doesn't exist)")
     if source_module in sys.modules:
         source_module = sys.modules[source_module]
 
-    if not isinstance(fofs, dict):
+    if not fofs:
+        fofs = {}
+    elif not isinstance(fofs, dict):
         fofs = dict((func.__name__, func) if callable(func) else func
                     for func in fofs)
-    if not isinstance(hofs, dict):
+    if not hofs:
+        hofs = {}
+    elif not isinstance(hofs, dict):
         hofs = dict((func.__name__, func) if callable(func) else func
                     for func in hofs)
 
-    hof_module = FirstMetaModule(module_name, source_module, fofs, hofs,
-                                 reverse=reverse, composition=composition)
-    return hof_module
+    if module_name in sys.modules:
+        HiddenMetaModule(module_name, fofs, hofs, reverse=reverse,
+                         composition=composition)
+        meta_module = sys.modules[module_name]
+    else:
+        meta_module = FirstMetaModule(meta_name, source_module, fofs, hofs,
+                                      reverse=reverse, composition=composition)
+    return meta_module
