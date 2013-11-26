@@ -302,3 +302,13 @@ def test_module_loader():
                 assert empty4.comp.inc is loader.load_module('empty4.comp.inc')
                 tested += 1
     assert tested > 0
+
+
+def test_dunder_all():
+    sys.modules['empty5'] = imp.new_module('empty5')
+    metafunc('empty5.comp', fofs1, hofs1, composition=True)
+    from empty5.comp.inc.inc.inc import one
+    import empty5
+    assert empty5.comp.__all__ == []
+    assert sorted(empty5.comp.inc.__all__) == sorted(['one', 'two', 'three',
+                                                      'identity'])

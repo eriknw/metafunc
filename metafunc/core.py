@@ -57,6 +57,7 @@ class MetaModule(BaseModule):
         self._composition = source._composition
         self._func = self._hofs[name]
         self._rfunc = lambda x: source._rfunc(self._func(x))
+        self.__all__ = list(self._fofs)
         for funcname in self._fofs:
             setattr(self, funcname, self._apply(funcname))
 
@@ -100,6 +101,7 @@ class FirstMetaModule(BaseModule):
         self._composition = composition
         self._func = _identity
         self._rfunc = _identity
+        self.__all__ = []
         for item in self._hofs:
             setattr(self, item, MetaModule(item, self))
         if source:
@@ -127,6 +129,7 @@ class HiddenMetaModule(BaseModule):
         self._composition = composition
         self._func = _identity
         self._rfunc = _identity
+        self.__all__ = []
         source_module = sys.modules[name]
         for item in self._hofs:
             itemname = '%s.%s' % (name, item)
