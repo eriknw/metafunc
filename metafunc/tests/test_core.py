@@ -1,6 +1,6 @@
 import imp
 import sys
-from metafunc.core import metafunc
+from metafunc.core import metafunc, addfofs, addhofs
 from metafunc.utils import raises
 from zmm.firstorder import one, two, three, inc, double, triple, identity
 from zmm.higherorder import incremented, doubled, tripled, identified
@@ -319,3 +319,79 @@ def test_single_callable():
     metafunc('empty6.comp', one, inc, composition=True)
     import empty6
     assert empty6.comp.inc.inc.inc.one() == 4
+
+
+def test_has_attr():
+    sys.modules['empty7'] = imp.new_module('empty7')
+    metafunc('empty7.comp', one, inc, composition=True)
+    import empty7
+    assert hasattr(empty7.comp.inc, 'one') is True
+    assert hasattr(empty7.comp.inc, 'two') is False
+    assert hasattr(empty7.comp.inc, 'inc') is True  # it gets created
+    assert empty7.comp.inc.__package__ + '.inc' in sys.modules
+    assert empty7.comp.inc.inc.__package__ + '.inc' not in sys.modules
+
+
+def test_add_fofs():
+    sys.modules['empty8'] = imp.new_module('empty8')
+    metafunc('empty8.comp', one, inc, composition=True)
+    import empty8
+    assert empty8.comp.inc.one() == 2
+    addfofs('empty8.comp', two)
+    assert empty8.comp.inc.two() == 3
+    assert empty8.comp.inc.inc.two() == 4
+    assert raises(ValueError, lambda: addfofs('empty8.comp', two))
+    assert raises(ValueError, lambda: addfofs('empty8.comp', inc))
+    assert raises(ValueError, lambda: addfofs('empty8', three))
+    assert raises(ValueError, lambda: addfofs('empty8.comp.foo.bar', three))
+    addfofs('empty8.comp.inc.inc', three)
+    assert empty8.comp.inc.three() == 4
+
+
+def test_add_hofs():
+    sys.modules['empty9'] = imp.new_module('empty9')
+    metafunc('empty9.comp', one, inc, composition=True)
+    import empty9
+    assert empty9.comp.inc.inc.one() == 3
+    addhofs('empty9.comp', double)
+    assert empty9.comp.double.one() == 2
+    assert empty9.comp.inc.inc.inc.double.one() == 8
+    assert raises(ValueError, lambda: addhofs('empty9.comp', double))
+    assert raises(ValueError, lambda: addhofs('empty9.comp', one))
+    assert raises(ValueError, lambda: addhofs('empty9', triple))
+    assert raises(ValueError, lambda: addhofs('empty9.comp.foo.bar', triple))
+    addhofs('empty9.comp.inc.inc', triple)
+    assert empty9.comp.triple.one() == 3
+
+
+def test_metafunc_on_metamodules():
+    sys.modules['empty10'] = imp.new_module('empty10')
+    metafunc('empty10.comp', one, inc, composition=True)
+    import empty10.comp.inc.inc.inc
+    assert raises(ValueError, lambda: metafunc('empty10.comp.inc', two,
+                                               double, composition=True))
+    # It is allowed to do this on a base module as long as names don't clash
+    # XXX: perhaps this should be a convenient way to add fofs and hofs
+    metafunc('empty10.comp', [one, two, three], double, composition=True)
+    import empty10
+    assert empty10.comp.double.double.one() == 4
+    assert raises(AttributeError, lambda: empty10.comp.double.inc.one())
+    assert raises(AttributeError, lambda: empty10.comp.inc.double.one())
+    assert raises(ValueError, lambda: (metafunc('empty10.comp', one,
+                                       [inc, triple], composition=True)))
+    # same tests on a hidden metamodule
+    metafunc('empty10', one, inc, composition=True)
+    assert raises(ValueError, lambda: metafunc('empty10.inc', two,
+                                               double, composition=True))
+    metafunc('empty10', [one, two, three], double, composition=True)
+    assert empty10.double.double.one() == 4
+    assert raises(AttributeError, lambda: empty10.double.inc.one())
+    assert raises(AttributeError, lambda: empty10.inc.double.one())
+    assert raises(ValueError, lambda: (metafunc('empty10', one,
+                                       [inc, triple], composition=True)))
+
+
+def test_fofs_and_hofs_dont_intersect():
+    sys.modules['empty11'] = imp.new_module('empty11')
+    assert raises(ValueError, lambda: metafunc('empty11.comp', [one, inc],
+                                               inc, composition=True))

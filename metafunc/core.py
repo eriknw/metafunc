@@ -2,7 +2,8 @@ import sys
 import types
 
 
-_identity = lambda x: x
+def _identity(x):
+    return x
 
 
 class ModuleLoader(object):
@@ -102,10 +103,13 @@ class FirstMetaModule(BaseModule):
         self._func = _identity
         self._rfunc = _identity
         self.__all__ = []
-        for item in self._hofs:
-            setattr(self, item, MetaModule(item, self))
+        for funcname in self._hofs:
+            self._apply_hof(funcname)
         if source:
             setattr(source, name, self)
+
+    def _apply_hof(self, funcname):
+        setattr(self, funcname, MetaModule(funcname, self))
 
     def __getattr__(self, name):
         if name in self._fofs:
@@ -130,18 +134,36 @@ class HiddenMetaModule(BaseModule):
         self._func = _identity
         self._rfunc = _identity
         self.__all__ = []
-        source_module = sys.modules[name]
-        for item in self._hofs:
-            itemname = '%s.%s' % (name, item)
-            if itemname in sys.modules:
-                raise ValueError('Cannot override module %s' % itemname)
-            setattr(self, item, MetaModule(item, self))
-            setattr(source_module, item, getattr(self, item))
+        for funcname in self._hofs:
+            self._apply_hof(funcname)
+        source_module = sys.modules[self.__package__]
+        setattr(source_module, '_hidden_metamodule_', self)
+
+    def _apply_hof(self, funcname):
+        source_module = sys.modules[self.__package__]
+        fullname = '%s.%s' % (self.__package__, funcname)
+        if fullname in sys.modules:
+            raise ValueError('Cannot override module %s' % fullname)
+        setattr(self, funcname, MetaModule(funcname, self))
+        setattr(source_module, funcname, getattr(self, funcname))
 
     def __getattr__(self, name):
         if name in self._fofs:
             return self._fofs[name]
         raise AttributeError
+
+
+def _process_funcs(funcs):
+    if not funcs:
+        funcs = {}
+    elif callable(funcs) and hasattr(funcs, '__name__'):
+        funcs = {funcs.__name__: funcs}
+    elif not isinstance(funcs, dict):
+        funcs = dict((func.__name__, func) if callable(func) else func
+                     for func in funcs)
+    else:
+        funcs = funcs.copy()
+    return funcs
 
 
 def metafunc(module_name, fofs, hofs, reverse=False, composition=False):
@@ -185,26 +207,15 @@ def metafunc(module_name, fofs, hofs, reverse=False, composition=False):
         raise ValueError("Bad module name (base module doesn't exist)")
     if source_module in sys.modules:
         source_module = sys.modules[source_module]
+        if (isinstance(source_module, BaseModule) or
+                isinstance(getattr(source_module, '_hidden_metamodule_', None),
+                           BaseModule)):
+            raise ValueError('Calling "metafunc" on MetaModules not supported')
 
-    if not fofs:
-        fofs = {}
-    elif callable(fofs) and hasattr(fofs, '__name__'):
-        fofs = {fofs.__name__: fofs}
-    elif not isinstance(fofs, dict):
-        fofs = dict((func.__name__, func) if callable(func) else func
-                    for func in fofs)
-    else:
-        fofs = fofs.copy()
-
-    if not hofs:
-        hofs = {}
-    elif callable(hofs) and hasattr(hofs, '__name__'):
-        hofs = {hofs.__name__: hofs}
-    elif not isinstance(hofs, dict):
-        hofs = dict((func.__name__, func) if callable(func) else func
-                    for func in hofs)
-    else:
-        hofs = hofs.copy()
+    fofs = _process_funcs(fofs)
+    hofs = _process_funcs(hofs)
+    if set(fofs).intersection(hofs):
+        raise ValueError('Cannot use same name for fofs and hofs')
 
     if module_name in sys.modules:
         HiddenMetaModule(module_name, fofs, hofs, reverse=reverse,
@@ -214,3 +225,52 @@ def metafunc(module_name, fofs, hofs, reverse=False, composition=False):
         meta_module = FirstMetaModule(meta_name, source_module, fofs, hofs,
                                       reverse=reverse, composition=composition)
     return meta_module
+
+
+def addfofs(module_name, fofs):
+    # if input is a module object, get its name
+    module_name = getattr(module_name, '__name__', module_name)
+    if module_name not in sys.modules:
+        raise ValueError('Bad module name')
+    module = sys.modules[module_name]
+    if not isinstance(module, BaseModule):
+        raise ValueError('Bad module type')
+    while isinstance(module._source, BaseModule):
+        module = module._source
+
+    fofs = _process_funcs(fofs)
+    fofset = set(fofs)
+    if fofset.intersection(module._fofs):
+        raise ValueError('First order function already defined')
+    if fofset.intersection(module._hofs):
+        raise ValueError('Function name already used by higher-order function')
+    module._fofs.update(fofs)
+    nextmodules = [getattr(module, item) for item in module._hofs]
+    while nextmodules:
+        module = nextmodules.pop()
+        for funcname in fofs:
+            setattr(module, funcname, module._apply(funcname))
+        nextmodules.extend(getattr(module, item) for item in module._hofs
+                           if module.__package__ + '.' + item in sys.modules)
+
+
+def addhofs(module_name, hofs):
+    # if input is a module object, get its name
+    module_name = getattr(module_name, '__name__', module_name)
+    if module_name not in sys.modules:
+        raise ValueError('Bad module name')
+    module = sys.modules[module_name]
+    if not isinstance(module, BaseModule):
+        raise ValueError('Bad module type')
+    while isinstance(module._source, BaseModule):
+        module = module._source
+
+    hofs = _process_funcs(hofs)
+    hofset = set(hofs)
+    if hofset.intersection(module._hofs):
+        raise ValueError('Higher-order function already defined')
+    if hofset.intersection(module._fofs):
+        raise ValueError('Function name already used by first order function')
+    module._hofs.update(hofs)
+    for funcname in hofs:
+        module._apply_hof(funcname)
