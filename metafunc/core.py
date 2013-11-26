@@ -188,14 +188,23 @@ def metafunc(module_name, fofs, hofs, reverse=False, composition=False):
 
     if not fofs:
         fofs = {}
+    elif callable(fofs) and hasattr(fofs, '__name__'):
+        fofs = {fofs.__name__: fofs}
     elif not isinstance(fofs, dict):
         fofs = dict((func.__name__, func) if callable(func) else func
                     for func in fofs)
+    else:
+        fofs = fofs.copy()
+
     if not hofs:
         hofs = {}
+    elif callable(hofs) and hasattr(hofs, '__name__'):
+        hofs = {hofs.__name__: hofs}
     elif not isinstance(hofs, dict):
         hofs = dict((func.__name__, func) if callable(func) else func
                     for func in hofs)
+    else:
+        hofs = hofs.copy()
 
     if module_name in sys.modules:
         HiddenMetaModule(module_name, fofs, hofs, reverse=reverse,

@@ -312,3 +312,10 @@ def test_dunder_all():
     assert empty5.comp.__all__ == []
     assert sorted(empty5.comp.inc.__all__) == sorted(['one', 'two', 'three',
                                                       'identity'])
+
+
+def test_single_callable():
+    sys.modules['empty6'] = imp.new_module('empty6')
+    metafunc('empty6.comp', one, inc, composition=True)
+    import empty6
+    assert empty6.comp.inc.inc.inc.one() == 4
