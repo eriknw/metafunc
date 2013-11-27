@@ -166,7 +166,7 @@ def _process_funcs(funcs):
     return funcs
 
 
-def metafunc(module_name, fofs, hofs, reverse=False, composition=False):
+def metafunc(module_name, hofs, fofs, reverse=False, composition=False):
     """ Create a module of higher-order functions that can be chained on import
 
     For example:

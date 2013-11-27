@@ -11,7 +11,7 @@ hofs1 = [inc, double, triple]
 
 
 def test_composed():
-    metafunc('zmm.comp', fofs1, hofs1, composition=True, reverse=False)
+    metafunc('zmm.comp', hofs1, fofs1, composition=True, reverse=False)
     # (1) check simple import
     from zmm.comp.inc import one
     assert one() == 2
@@ -36,7 +36,7 @@ def test_composed():
 
 def test_composed_new():
     # check new package creation
-    metafunc('comp', fofs1, hofs1, composition=True, reverse=False)
+    metafunc('comp', hofs1, fofs1, composition=True, reverse=False)
     # (1) check simple import
     from comp.inc import one
     assert one() == 2
@@ -60,7 +60,7 @@ def test_composed_new():
 
 
 def test_composed_reversed():
-    metafunc('zmm.rcomp', fofs1, hofs1, composition=True, reverse=True)
+    metafunc('zmm.rcomp', hofs1, fofs1, composition=True, reverse=True)
     # (1) check simple import
     from zmm.rcomp.inc import one
     assert one() == 2
@@ -84,7 +84,7 @@ def test_composed_reversed():
 
 
 def test_composed_reversed_new():
-    metafunc('rcomp', fofs1, hofs1, composition=True, reverse=True)
+    metafunc('rcomp', hofs1, fofs1, composition=True, reverse=True)
     # (1) check simple import
     from rcomp.inc import one
     assert one() == 2
@@ -112,7 +112,7 @@ hofs2 = [incremented, doubled, tripled, identified]
 
 
 def test_hof():
-    metafunc('zmm.hofs', fofs2, hofs2, reverse=False)
+    metafunc('zmm.hofs', hofs2, fofs2, reverse=False)
     # (1) check simple import
     from zmm.hofs.doubled import one
     assert one() == 2
@@ -136,7 +136,7 @@ def test_hof():
 
 
 def test_hof_new():
-    metafunc('hofs', fofs2, hofs2, reverse=False)
+    metafunc('hofs', hofs2, fofs2, reverse=False)
     # (1) check simple import
     from hofs.doubled import one
     assert one() == 2
@@ -160,7 +160,7 @@ def test_hof_new():
 
 
 def test_hof_reversed():
-    metafunc('zmm.rhofs', fofs2, hofs2, reverse=True)
+    metafunc('zmm.rhofs', hofs2, fofs2, reverse=True)
     # (1) check simple import
     from zmm.rhofs.doubled import one
     assert one() == 2
@@ -184,7 +184,7 @@ def test_hof_reversed():
 
 
 def test_hof_reversed_new():
-    metafunc('rhofs', fofs2, hofs2, reverse=True)
+    metafunc('rhofs', hofs2, fofs2, reverse=True)
     # (1) check simple import
     from rhofs.doubled import one
     assert one() == 2
@@ -208,15 +208,15 @@ def test_hof_reversed_new():
 
 
 def test_bad_module_name():
-    assert raises(ValueError, lambda: metafunc('zmm.foo.bar.comp', fofs1,
-                                               hofs1, composition=True))
+    assert raises(ValueError, lambda: metafunc('zmm.foo.bar.comp', hofs1,
+                                               fofs1, composition=True))
 
 fofs3 = [('f_one', one), ('two', two), three, identity]
 hofs3 = [('f_inc', inc), ('double', double), triple]
 
 
 def test_function_tuple():
-    metafunc('zmm.fcomp', fofs3, hofs3, composition=True)
+    metafunc('zmm.fcomp', hofs3, fofs3, composition=True)
     from zmm.fcomp.f_inc import f_one
     assert f_one() == 2
     from zmm.fcomp.double.f_inc.triple import f_one, two, three
@@ -230,7 +230,7 @@ hofs4 = {'d_inc': inc, 'double': double, 'triple': triple}
 
 
 def test_function_dict():
-    metafunc('zmm.dcomp', fofs4, hofs4, composition=True)
+    metafunc('zmm.dcomp', hofs4, fofs4, composition=True)
     from zmm.dcomp.d_inc import d_one
     assert d_one() == 2
     from zmm.dcomp.double.d_inc.triple import d_one, two, three
@@ -240,9 +240,9 @@ def test_function_dict():
 
 
 def test_empty():
-    metafunc('zmm.empty_fofs', {}, hofs1, composition=True)
+    metafunc('zmm.empty_fofs', hofs1, {}, composition=True)
     from zmm.empty_fofs.double.triple import double
-    metafunc('zmm.empty_hofs', fofs1, {}, composition=True)
+    metafunc('zmm.empty_hofs', {}, fofs1, composition=True)
     import zmm.empty_hofs
     metafunc('zmm.empty_fofs_hofs', {}, {}, composition=True)
     import zmm.empty_fofs_hofs
@@ -252,14 +252,14 @@ def test_empty():
     import zmm.empty_fofs_hofs3
     metafunc('zmm.empty_fofs_hofs4', {}, {}, composition=True, reverse=True)
     import zmm.empty_fofs_hofs4
-    metafunc('zmm.empty_fofs_hofs5', None, ())
+    metafunc('zmm.empty_fofs_hofs5', (), None)
     import zmm.empty_fofs_hofs5
 
 
 def test_mirror_module():
     sys.modules['empty1'] = imp.new_module('empty1')
     import empty1 as orig_empty
-    meta_empty = metafunc('empty1', fofs1, hofs1, composition=True)
+    meta_empty = metafunc('empty1', hofs1, fofs1, composition=True)
     import empty1 as new_empty
     assert orig_empty == meta_empty
     assert orig_empty == new_empty
@@ -267,13 +267,13 @@ def test_mirror_module():
     from empty1.inc.inc.double import one
     assert one() == 6
     # don't override modules
-    assert raises(ValueError, lambda: metafunc('empty1', fofs1, hofs1,
+    assert raises(ValueError, lambda: metafunc('empty1', hofs1, fofs1,
                                                composition=True))
 
 
 def test_module_input():
     mod = sys.modules['empty2'] = imp.new_module('empty2')
-    meta_empty = metafunc(mod, fofs1, hofs1, composition=True)
+    meta_empty = metafunc(mod, hofs1, fofs1, composition=True)
     assert mod == meta_empty
     from empty2.inc.inc.inc import one
     assert one() == 4
@@ -281,18 +281,18 @@ def test_module_input():
 
 def test_attribute_failure():
     sys.modules['empty3'] = imp.new_module('empty3')
-    metafunc('empty3.comp', fofs1, hofs1, composition=True)
+    metafunc('empty3.comp', hofs1, fofs1, composition=True)
     import empty3.comp
     assert raises(AttributeError, lambda: empty3.comp.foo)
     assert raises(AttributeError, lambda: empty3.comp.inc.double.foo)
-    metafunc('empty3', fofs1, hofs1, composition=True)
+    metafunc('empty3', hofs1, fofs1, composition=True)
     import empty3
     assert raises(AttributeError, lambda: empty3.inc._source.foo)
 
 
 def test_module_loader():
     sys.modules['empty4'] = imp.new_module('empty4')
-    metafunc('empty4.comp', fofs1, hofs1, composition=True)
+    metafunc('empty4.comp', hofs1, fofs1, composition=True)
     import empty4.comp.inc
     tested = 0
     for item in sys.meta_path:
@@ -306,7 +306,7 @@ def test_module_loader():
 
 def test_dunder_all():
     sys.modules['empty5'] = imp.new_module('empty5')
-    metafunc('empty5.comp', fofs1, hofs1, composition=True)
+    metafunc('empty5.comp', hofs1, fofs1, composition=True)
     from empty5.comp.inc.inc.inc import one
     import empty5
     assert empty5.comp.__all__ == []
@@ -316,14 +316,14 @@ def test_dunder_all():
 
 def test_single_callable():
     sys.modules['empty6'] = imp.new_module('empty6')
-    metafunc('empty6.comp', one, inc, composition=True)
+    metafunc('empty6.comp', inc, one, composition=True)
     import empty6
     assert empty6.comp.inc.inc.inc.one() == 4
 
 
 def test_has_attr():
     sys.modules['empty7'] = imp.new_module('empty7')
-    metafunc('empty7.comp', one, inc, composition=True)
+    metafunc('empty7.comp', inc, one, composition=True)
     import empty7
     assert hasattr(empty7.comp.inc, 'one') is True
     assert hasattr(empty7.comp.inc, 'two') is False
@@ -334,7 +334,7 @@ def test_has_attr():
 
 def test_add_fofs():
     sys.modules['empty8'] = imp.new_module('empty8')
-    metafunc('empty8.comp', one, inc, composition=True)
+    metafunc('empty8.comp', inc, one, composition=True)
     import empty8
     assert empty8.comp.inc.one() == 2
     addfofs('empty8.comp', two)
@@ -350,7 +350,7 @@ def test_add_fofs():
 
 def test_add_hofs():
     sys.modules['empty9'] = imp.new_module('empty9')
-    metafunc('empty9.comp', one, inc, composition=True)
+    metafunc('empty9.comp', inc, one, composition=True)
     import empty9
     assert empty9.comp.inc.inc.one() == 3
     addhofs('empty9.comp', double)
@@ -366,29 +366,29 @@ def test_add_hofs():
 
 def test_metafunc_on_metamodules():
     sys.modules['empty10'] = imp.new_module('empty10')
-    metafunc('empty10.comp', one, inc, composition=True)
+    metafunc('empty10.comp', inc, one, composition=True)
     import empty10.comp.inc.inc.inc
-    assert raises(ValueError, lambda: metafunc('empty10.comp.inc', two,
-                                               double, composition=True))
+    assert raises(ValueError, lambda: metafunc('empty10.comp.inc', double,
+                                               two, composition=True))
     # It is allowed to do this on a base module as long as names don't clash
     # XXX: perhaps this should be a convenient way to add fofs and hofs
-    metafunc('empty10.comp', [one, two, three], double, composition=True)
+    metafunc('empty10.comp', double, [one, two, three], composition=True)
     import empty10
     assert empty10.comp.double.double.one() == 4
     assert raises(AttributeError, lambda: empty10.comp.double.inc.one())
     assert raises(AttributeError, lambda: empty10.comp.inc.double.one())
-    assert raises(ValueError, lambda: (metafunc('empty10.comp', one,
-                                       [inc, triple], composition=True)))
+    assert raises(ValueError, lambda: (metafunc('empty10.comp', [inc, triple],
+                                       one, composition=True)))
     # same tests on a hidden metamodule
-    metafunc('empty10', one, inc, composition=True)
-    assert raises(ValueError, lambda: metafunc('empty10.inc', two,
-                                               double, composition=True))
-    metafunc('empty10', [one, two, three], double, composition=True)
+    metafunc('empty10', inc, one, composition=True)
+    assert raises(ValueError, lambda: metafunc('empty10.inc', double,
+                                               two, composition=True))
+    metafunc('empty10', double, [one, two, three], composition=True)
     assert empty10.double.double.one() == 4
     assert raises(AttributeError, lambda: empty10.double.inc.one())
     assert raises(AttributeError, lambda: empty10.inc.double.one())
-    assert raises(ValueError, lambda: (metafunc('empty10', one,
-                                       [inc, triple], composition=True)))
+    assert raises(ValueError, lambda: (metafunc('empty10', [inc, triple],
+                                       one, composition=True)))
 
 
 def test_fofs_and_hofs_dont_intersect():
