@@ -12,8 +12,8 @@ class ModuleLoader(object):
         self._source = source
 
     def find_module(self, fullname, path=None):
-        base, dot, hof = fullname.rpartition('.')
-        if base == self._source.__name__ and hof in self._source._hofs:
+        base, dot, name = fullname.rpartition('.')
+        if base == self._source.__name__ and name in self._source._metafuncs:
             return self
 
     def load_module(self, fullname):
@@ -52,19 +52,19 @@ class MetaModule(BaseModule):
     def __init__(self, name, source, doc=''):
         super(MetaModule, self).__init__(name, source)
         # Get parameters from the source module to ensure consistency
-        self._fofs = source._fofs
-        self._hofs = source._hofs
+        self._funcs = source._funcs
+        self._metafuncs = source._metafuncs
         self._reverse = source._reverse
         self._composition = source._composition
-        self._func = self._hofs[name]
+        self._func = self._metafuncs[name]
         self._rfunc = lambda x: source._rfunc(self._func(x))
-        self.__all__ = list(self._fofs)
-        for funcname in self._fofs:
+        self.__all__ = list(self._funcs)
+        for funcname in self._funcs:
             setattr(self, funcname, self._apply(funcname))
 
     def _apply(self, funcname):
         if self._reverse:
-            first_func = self._fofs[funcname]
+            first_func = self._funcs[funcname]
             if self._composition:
                 # func1(func2(orig_func(*args, **kwargs)))
                 return lambda *args, **kwargs: (
@@ -83,8 +83,8 @@ class MetaModule(BaseModule):
                 return self._func(prev_func)
 
     def __getattr__(self, name):
-        # Allow attribute chaining of hofs
-        if name in self._hofs:
+        # Allow attribute chaining of metafuncs
+        if name in self._metafuncs:
             item = MetaModule(name, self)
             setattr(self, name, item)
             return item
@@ -93,27 +93,27 @@ class MetaModule(BaseModule):
 
 class FirstMetaModule(BaseModule):
     """ A module from which the higher-order functions originate"""
-    def __init__(self, name, source, fofs, hofs, doc='', reverse=False,
+    def __init__(self, name, source, metafuncs, funcs, doc='', reverse=False,
                  composition=False):
         super(FirstMetaModule, self).__init__(name, source)
-        self._fofs = fofs
-        self._hofs = hofs
+        self._funcs = funcs
+        self._metafuncs = metafuncs
         self._reverse = reverse
         self._composition = composition
         self._func = _identity
         self._rfunc = _identity
         self.__all__ = []
-        for funcname in self._hofs:
-            self._apply_hof(funcname)
+        for funcname in self._metafuncs:
+            self._apply_metafunc(funcname)
         if source:
             setattr(source, name, self)
 
-    def _apply_hof(self, funcname):
+    def _apply_metafunc(self, funcname):
         setattr(self, funcname, MetaModule(funcname, self))
 
     def __getattr__(self, name):
-        if name in self._fofs:
-            return self._fofs[name]
+        if name in self._funcs:
+            return self._funcs[name]
         raise AttributeError
 
 
@@ -124,22 +124,22 @@ class HiddenMetaModule(BaseModule):
     functions to originate from the existing module.  It is hidden so it
     doesn't replace the original module.
     """
-    def __init__(self, name, fofs, hofs, doc='', reverse=False,
+    def __init__(self, name, metafuncs, funcs, doc='', reverse=False,
                  composition=False):
         super(HiddenMetaModule, self).__init__(name, None, hidden=True)
-        self._fofs = fofs
-        self._hofs = hofs
+        self._funcs = funcs
+        self._metafuncs = metafuncs
         self._reverse = reverse
         self._composition = composition
         self._func = _identity
         self._rfunc = _identity
         self.__all__ = []
-        for funcname in self._hofs:
-            self._apply_hof(funcname)
+        for funcname in self._metafuncs:
+            self._apply_metafunc(funcname)
         source_module = sys.modules[self.__package__]
         setattr(source_module, '_hidden_metamodule_', self)
 
-    def _apply_hof(self, funcname):
+    def _apply_metafunc(self, funcname):
         source_module = sys.modules[self.__package__]
         fullname = '%s.%s' % (self.__package__, funcname)
         if fullname in sys.modules:
@@ -148,8 +148,8 @@ class HiddenMetaModule(BaseModule):
         setattr(source_module, funcname, getattr(self, funcname))
 
     def __getattr__(self, name):
-        if name in self._fofs:
-            return self._fofs[name]
+        if name in self._funcs:
+            return self._funcs[name]
         raise AttributeError
 
 
@@ -166,7 +166,7 @@ def _process_funcs(funcs):
     return funcs
 
 
-def metafunc(module_name, hofs, fofs, reverse=False, composition=False):
+def metafunc(module_name, metafuncs, funcs, reverse=False, composition=False):
     """ Create a module of higher-order functions that can be chained on import
 
     For example:
@@ -212,22 +212,23 @@ def metafunc(module_name, hofs, fofs, reverse=False, composition=False):
                            BaseModule)):
             raise ValueError('Calling "metafunc" on MetaModules not supported')
 
-    fofs = _process_funcs(fofs)
-    hofs = _process_funcs(hofs)
-    if set(fofs).intersection(hofs):
-        raise ValueError('Cannot use same name for fofs and hofs')
+    funcs = _process_funcs(funcs)
+    metafuncs = _process_funcs(metafuncs)
+    if set(funcs).intersection(metafuncs):
+        raise ValueError('Cannot use same name for funcs and metafuncs')
 
     if module_name in sys.modules:
-        HiddenMetaModule(module_name, fofs, hofs, reverse=reverse,
+        HiddenMetaModule(module_name, metafuncs, funcs, reverse=reverse,
                          composition=composition)
         meta_module = sys.modules[module_name]
     else:
-        meta_module = FirstMetaModule(meta_name, source_module, fofs, hofs,
-                                      reverse=reverse, composition=composition)
+        meta_module = FirstMetaModule(meta_name, source_module, metafuncs,
+                                      funcs, reverse=reverse,
+                                      composition=composition)
     return meta_module
 
 
-def addfofs(module_name, fofs):
+def addfuncs(module_name, funcs):
     # if input is a module object, get its name
     module_name = getattr(module_name, '__name__', module_name)
     if module_name not in sys.modules:
@@ -238,23 +239,23 @@ def addfofs(module_name, fofs):
     while isinstance(module._source, BaseModule):
         module = module._source
 
-    fofs = _process_funcs(fofs)
-    fofset = set(fofs)
-    if fofset.intersection(module._fofs):
+    funcs = _process_funcs(funcs)
+    funcset = set(funcs)
+    if funcset.intersection(module._funcs):
         raise ValueError('First order function already defined')
-    if fofset.intersection(module._hofs):
+    if funcset.intersection(module._metafuncs):
         raise ValueError('Function name already used by higher-order function')
-    module._fofs.update(fofs)
-    nextmodules = [getattr(module, item) for item in module._hofs]
+    module._funcs.update(funcs)
+    nextmodules = [getattr(module, item) for item in module._metafuncs]
     while nextmodules:
         module = nextmodules.pop()
-        for funcname in fofs:
+        for funcname in funcs:
             setattr(module, funcname, module._apply(funcname))
-        nextmodules.extend(getattr(module, item) for item in module._hofs
+        nextmodules.extend(getattr(module, item) for item in module._metafuncs
                            if module.__package__ + '.' + item in sys.modules)
 
 
-def addhofs(module_name, hofs):
+def addmetafuncs(module_name, metafuncs):
     # if input is a module object, get its name
     module_name = getattr(module_name, '__name__', module_name)
     if module_name not in sys.modules:
@@ -265,12 +266,12 @@ def addhofs(module_name, hofs):
     while isinstance(module._source, BaseModule):
         module = module._source
 
-    hofs = _process_funcs(hofs)
-    hofset = set(hofs)
-    if hofset.intersection(module._hofs):
+    metafuncs = _process_funcs(metafuncs)
+    metafuncset = set(metafuncs)
+    if metafuncset.intersection(module._metafuncs):
         raise ValueError('Higher-order function already defined')
-    if hofset.intersection(module._fofs):
+    if metafuncset.intersection(module._funcs):
         raise ValueError('Function name already used by first order function')
-    module._hofs.update(hofs)
-    for funcname in hofs:
-        module._apply_hof(funcname)
+    module._metafuncs.update(metafuncs)
+    for funcname in metafuncs:
+        module._apply_metafunc(funcname)

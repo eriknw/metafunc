@@ -1,6 +1,6 @@
 import imp
 import sys
-from metafunc.core import metafunc, addfofs, addhofs
+from metafunc.core import metafunc, addfuncs, addmetafuncs
 from metafunc.utils import raises
 from zmm.firstorder import one, two, three, inc, double, triple, identity
 from zmm.higherorder import incremented, doubled, tripled, identified
@@ -337,14 +337,14 @@ def test_add_fofs():
     metafunc('empty8.comp', inc, one, composition=True)
     import empty8
     assert empty8.comp.inc.one() == 2
-    addfofs('empty8.comp', two)
+    addfuncs('empty8.comp', two)
     assert empty8.comp.inc.two() == 3
     assert empty8.comp.inc.inc.two() == 4
-    assert raises(ValueError, lambda: addfofs('empty8.comp', two))
-    assert raises(ValueError, lambda: addfofs('empty8.comp', inc))
-    assert raises(ValueError, lambda: addfofs('empty8', three))
-    assert raises(ValueError, lambda: addfofs('empty8.comp.foo.bar', three))
-    addfofs('empty8.comp.inc.inc', three)
+    assert raises(ValueError, lambda: addfuncs('empty8.comp', two))
+    assert raises(ValueError, lambda: addfuncs('empty8.comp', inc))
+    assert raises(ValueError, lambda: addfuncs('empty8', three))
+    assert raises(ValueError, lambda: addfuncs('empty8.comp.foo.bar', three))
+    addfuncs('empty8.comp.inc.inc', three)
     assert empty8.comp.inc.three() == 4
 
 
@@ -353,14 +353,15 @@ def test_add_hofs():
     metafunc('empty9.comp', inc, one, composition=True)
     import empty9
     assert empty9.comp.inc.inc.one() == 3
-    addhofs('empty9.comp', double)
+    addmetafuncs('empty9.comp', double)
     assert empty9.comp.double.one() == 2
     assert empty9.comp.inc.inc.inc.double.one() == 8
-    assert raises(ValueError, lambda: addhofs('empty9.comp', double))
-    assert raises(ValueError, lambda: addhofs('empty9.comp', one))
-    assert raises(ValueError, lambda: addhofs('empty9', triple))
-    assert raises(ValueError, lambda: addhofs('empty9.comp.foo.bar', triple))
-    addhofs('empty9.comp.inc.inc', triple)
+    assert raises(ValueError, lambda: addmetafuncs('empty9.comp', double))
+    assert raises(ValueError, lambda: addmetafuncs('empty9.comp', one))
+    assert raises(ValueError, lambda: addmetafuncs('empty9', triple))
+    assert raises(ValueError, lambda: addmetafuncs('empty9.comp.foo.bar',
+                                                   triple))
+    addmetafuncs('empty9.comp.inc.inc', triple)
     assert empty9.comp.triple.one() == 3
 
 
