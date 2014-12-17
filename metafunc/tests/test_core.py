@@ -32,6 +32,7 @@ def test_composed():
     # (6) check renaming (just because)
     from zmm.comp.inc.inc.inc import one as one_plus_three
     assert one_plus_three() == 4
+    assert zmm.comp.one() == 1
 
 
 def test_composed_new():
